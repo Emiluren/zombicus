@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, DuplicateRecordFields, RecursiveDo #-}
+{-# LANGUAGE RankNTypes, DuplicateRecordFields, RecursiveDo, OverloadedStrings #-}
 import ReflexHost
 
 import System.Random
@@ -11,7 +11,7 @@ import SDL (($=), Point(P))
 import qualified SDL
 import qualified SDL.Image
 
-data RenderData = RenderData
+data RenderData = RenderData Double
 
 data CharacterType = Sapiens | Zombicus
 
@@ -85,14 +85,22 @@ simpleHomoSapiens self posInit time eTick rng = do
                               }
 
 reflexGuest :: StdGen -> SdlApp RenderData
-reflexGuest rnd e = do
-    d <- foldDyn (:) [] e
-    return $ pure RenderData
+reflexGuest rnd eSdlEvent eTick time = do
+    d <- foldDyn (:) [] eSdlEvent
+    return $ RenderData <$> time
 
-render :: RenderData -> IO ()
-render _ = return ()
+render :: SDL.Renderer -> RenderData -> IO ()
+render renderer (RenderData time) = do
+    SDL.rendererDrawColor renderer $= V4 200 200 200 255
+    SDL.clear renderer
+    SDL.present renderer
+    putStrLn $ "time = " ++ show time
 
 main :: IO ()
 main = do
+    SDL.initializeAll
+    window <- SDL.createWindow "Zombicus" SDL.defaultWindow
+    renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
+
     rnd <- getStdGen
-    reflexHost (reflexGuest rnd) render
+    reflexHost (reflexGuest rnd) (render renderer)
