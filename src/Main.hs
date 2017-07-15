@@ -68,7 +68,7 @@ simpleHomoSapiens time eTick rng self posInit= do
         traj <- hold (makeTrajectory rng1 t posInit) eTraj
 
     let p = positionAt <$> traj <*> time
-        v = (_velocity :: Trajectory -> V2 Double) <$> traj
+        v = (^.velocity) <$> traj
     return $ Character self Sapiens <$> p <*> v
 
 reflexGuest :: StdGen -> SdlApp RenderData
