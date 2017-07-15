@@ -2,6 +2,7 @@
 import ReflexHost
 
 import System.Random
+import Control.Monad (forM_)
 import Control.Monad.Fix (MonadFix)
 
 import Reflex
@@ -11,7 +12,7 @@ import SDL (($=), Point(P))
 import qualified SDL
 import qualified SDL.Image
 
-data RenderData = RenderData Double
+data RenderData = RenderData [Character]
 
 data CharacterType = Sapiens | Zombicus
 
@@ -43,7 +44,7 @@ makeTrajectory rng t0_ orig_ =
                   }
 
 positionAt :: Trajectory -> Double -> V2 Double
-positionAt (Trajectory {t0 = startTime, orig = origPos, velocity = vel}) t =
+positionAt Trajectory {t0 = startTime, orig = origPos, velocity = vel} t =
     vel ^* (t - startTime) + origPos
 
 changeTrajectory :: (Reflex t) =>
@@ -68,33 +69,27 @@ generators :: StdGen -> [StdGen]
 generators g = let (g', g'') = split g in g' : generators g''
 
 simpleHomoSapiens :: (Reflex t, MonadHold t m, MonadFix m) =>
-    Int -> V2 Double -> Behavior t Double -> Event t () -> StdGen -> m (Behavior t Character)
-simpleHomoSapiens self posInit time eTick rng = do
+    Behavior t Double -> Event t () -> StdGen -> Int -> V2 Double -> m (Behavior t Character)
+simpleHomoSapiens time eTick rng self posInit= do
     let gt':gt:_ = generators rng
+    t <- sample time
+
     rec
         let eChange = push (changeTrajectory traj time) eTick
-        t <- sample time
-        traj <- hold (makeTrajectory gt' t posInit) =<<
-            mapAccumM_ (newTrajectory traj time) gt eChange
+        eTraj <- mapAccumM_ (newTrajectory traj time) gt eChange
+        traj <- hold (makeTrajectory gt' t posInit) eTraj
 
-    traj_ <- sample traj
-    return . pure $ Character { characterId = self
-                              , characterType = Sapiens
-                              , pos = positionAt traj_ t
-                              , velocity = velocity (traj_ :: Trajectory)
-                              }
+    let p = positionAt <$> traj <*> time
+        v = (velocity :: Trajectory -> V2 Double) <$> traj
+    return $ Character self Sapiens <$> p <*> v
 
 reflexGuest :: StdGen -> SdlApp RenderData
-reflexGuest rnd eSdlEvent eTick time = do
-    d <- foldDyn (:) [] eSdlEvent
-    return $ RenderData <$> time
-
-render :: SDL.Renderer -> RenderData -> IO ()
-render renderer (RenderData time) = do
-    SDL.rendererDrawColor renderer $= V4 200 200 200 255
-    SDL.clear renderer
-    SDL.present renderer
-    putStrLn $ "time = " ++ show time
+reflexGuest rnd _eSdlEvent eTick time = do
+    let startPositions = zipWith V2 [100,200..] [150,300..]
+    chars <- sequenceA $
+        zipWith3 (simpleHomoSapiens time eTick)
+             (generators rnd) [0..3] startPositions
+    return $ RenderData <$> sequenceA chars
 
 main :: IO ()
 main = do
@@ -102,5 +97,18 @@ main = do
     window <- SDL.createWindow "Zombicus" SDL.defaultWindow
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
 
+    human <- SDL.Image.loadTexture renderer "images/homo-sapien-left.png"
+
+    let render :: RenderData -> IO ()
+        render (RenderData chars) = do
+            SDL.rendererDrawColor renderer $= V4 200 200 200 255
+            SDL.clear renderer
+            forM_ chars $ \c -> do
+                let cpos = SDL.P $ floor <$> pos c
+                    size = V2 53 96
+                    destRect = SDL.Rectangle cpos size
+                SDL.copy renderer human Nothing (Just destRect)
+            SDL.present renderer
+
     rnd <- getStdGen
-    reflexHost (reflexGuest rnd) (render renderer)
+    reflexHost (reflexGuest rnd) render
