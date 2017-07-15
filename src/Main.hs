@@ -16,7 +16,6 @@ import qualified SDL
 import qualified SDL.Image
 
 import Control.Lens ((^.))
-import qualified Control.Lens as Lens
 
 data RenderData = RenderData [C.Character]
 
@@ -79,7 +78,7 @@ reflexGuest rnd _eSdlEvent eTick time = do
     chars <- sequenceA $
         zipWith3 (simpleHomoSapiens time eTick)
              (generators rnd) [0..3] startPositions
-    return $ RenderData . sortOn (Lens.view $ C.pos._y) <$> sequenceA chars
+    return $ RenderData . sortOn (^.C.pos._y) <$> sequenceA chars
 
 main :: IO ()
 main = do
