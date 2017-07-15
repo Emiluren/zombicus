@@ -1,64 +1,54 @@
-{-# LANGUAGE RankNTypes, DuplicateRecordFields, RecursiveDo, OverloadedStrings #-}
+{-# LANGUAGE RankNTypes, RecursiveDo, OverloadedStrings #-}
 import ReflexHost
+import qualified Trajectory as T
+import qualified Character as C
 
 import System.Random
 import Control.Monad (forM_)
 import Control.Monad.Fix (MonadFix)
+import Data.List (sortOn)
 
 import Reflex
 
-import SDL.Vect (V2(..), V4(..), (^*))
+import SDL.Vect (V2(..), V4(..), (^*), _y)
 import SDL (($=), Point(P))
 import qualified SDL
 import qualified SDL.Image
 
-data RenderData = RenderData [Character]
+import Control.Lens ((^.))
+import qualified Control.Lens as Lens
 
-data CharacterType = Sapiens | Zombicus
-
-data Character =
-    Character { characterId :: Int
-              , characterType :: CharacterType
-              , pos :: V2 Double
-              , velocity :: V2 Double
-              }
-
-data Trajectory =
-    Trajectory { t0 :: Double
-               , orig :: V2 Double
-               , period :: Double
-               , velocity :: V2 Double
-               }
+data RenderData = RenderData [C.Character]
 
 speed :: Double
 speed = 80
 
-makeTrajectory :: StdGen -> Double -> V2 Double -> Trajectory
+makeTrajectory :: StdGen -> Double -> V2 Double -> T.Trajectory
 makeTrajectory rng t0_ orig_ =
     let rndPeriod:rndAngle:_ = randoms rng :: [Double]
         angle = rndAngle * pi * 2
-    in Trajectory { t0 = t0_
-                  , orig = orig_
-                  , period = rndPeriod + 0.5
-                  , velocity = V2 (sin angle) (cos angle) ^* speed
-                  }
+    in T.Trajectory { T._t0 = t0_
+                    , T._orig = orig_
+                    , T._period = rndPeriod + 0.5
+                    , T._velocity = V2 (sin angle) (cos angle) ^* speed
+                    }
 
-positionAt :: Trajectory -> Double -> V2 Double
-positionAt Trajectory {t0 = startTime, orig = origPos, velocity = vel} t =
-    vel ^* (t - startTime) + origPos
+positionAt :: T.Trajectory -> Double -> V2 Double
+positionAt traj t =
+    traj^.T.velocity ^* (t - traj^.T.t0) + traj^.T.orig
 
 changeTrajectory :: (Reflex t) =>
-    Behavior t Trajectory -> Behavior t Double -> () -> PushM t (Maybe ())
+    Behavior t T.Trajectory -> Behavior t Double -> () -> PushM t (Maybe ())
 changeTrajectory traj time () = do
     traj_ <- sample traj
     t <- sample time
-    if t - t0 traj_ >= period traj_
+    if t - traj_^.T.t0 >= traj_^.T.period
         then return $ Just ()
         else return Nothing
 
 newTrajectory :: (Reflex t) =>
-    Behavior t Trajectory -> Behavior t Double -> StdGen ->
-    () -> PushM t (StdGen, Trajectory)
+    Behavior t T.Trajectory -> Behavior t Double -> StdGen ->
+    () -> PushM t (StdGen, T.Trajectory)
 newTrajectory traj time gen () = do
     let (g, g') = split gen
     t <- sample time
@@ -69,19 +59,19 @@ generators :: StdGen -> [StdGen]
 generators g = let (g', g'') = split g in g' : generators g''
 
 simpleHomoSapiens :: (Reflex t, MonadHold t m, MonadFix m) =>
-    Behavior t Double -> Event t () -> StdGen -> Int -> V2 Double -> m (Behavior t Character)
+    Behavior t Double -> Event t () -> StdGen -> Int -> V2 Double -> m (Behavior t C.Character)
 simpleHomoSapiens time eTick rng self posInit= do
-    let gt':gt:_ = generators rng
+    let (rng1, rng2) = split rng
     t <- sample time
 
     rec
         let eChange = push (changeTrajectory traj time) eTick
-        eTraj <- mapAccumM_ (newTrajectory traj time) gt eChange
-        traj <- hold (makeTrajectory gt' t posInit) eTraj
+        eTraj <- mapAccumM_ (newTrajectory traj time) rng2 eChange
+        traj <- hold (makeTrajectory rng1 t posInit) eTraj
 
     let p = positionAt <$> traj <*> time
-        v = (velocity :: Trajectory -> V2 Double) <$> traj
-    return $ Character self Sapiens <$> p <*> v
+        v = T._velocity <$> traj
+    return $ C.Character self C.Sapiens <$> p <*> v
 
 reflexGuest :: StdGen -> SdlApp RenderData
 reflexGuest rnd _eSdlEvent eTick time = do
@@ -89,7 +79,7 @@ reflexGuest rnd _eSdlEvent eTick time = do
     chars <- sequenceA $
         zipWith3 (simpleHomoSapiens time eTick)
              (generators rnd) [0..3] startPositions
-    return $ RenderData <$> sequenceA chars
+    return $ RenderData . sortOn (Lens.view $ C.pos._y) <$> sequenceA chars
 
 main :: IO ()
 main = do
@@ -107,13 +97,13 @@ main = do
             SDL.rendererDrawColor renderer $= V4 200 200 200 255
             SDL.clear renderer
             forM_ chars $ \c -> do
-                let cpos = SDL.P $ floor <$> pos c
+                let cpos = SDL.P $ floor <$> c^.C.pos
                     size = V2 53 96
                     destRect = SDL.Rectangle cpos size
-                    (V2 vx _) = velocity (c :: Character)
-                    sprite = case characterType c of
-                        Sapiens -> if vx < 0 then humanLeft else humanRight
-                        Zombicus -> if vx < 0 then zombieLeft else zombieRight
+                    (V2 vx _) = c^.C.velocity
+                    sprite = case c^.C.characterType of
+                        C.Sapiens -> if vx < 0 then humanLeft else humanRight
+                        C.Zombicus -> if vx < 0 then zombieLeft else zombieRight
                 SDL.copy renderer sprite Nothing (Just destRect)
             SDL.present renderer
 
