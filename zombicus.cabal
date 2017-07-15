@@ -18,8 +18,7 @@ executable zombicus
   main-is:             Main.hs
   other-modules:       ReflexHost
   default-language:    Haskell2010
-  other-modules:       Character
-                     , Trajectory
+  other-modules:       Records
   build-depends:       base >= 4.7 && < 5
                      , reflex
                      , sdl2
@@ -27,4 +26,4 @@ executable zombicus
                      , dependent-sum
                      , mtl
                      , random
-                     , lens
+                     , lens >= 4.15.3

@@ -4,10 +4,11 @@ packages:
 - '.'
 - location:
     git: git@github.com:reflex-frp/reflex.git
-    commit: 02cf9dbc89ba20b6e93622e0910a76d5e9d06669
+    commit: a1092192c61f3dec924a8e2686dfe3440681bab3
   extra-dep: true
 extra-deps:
 - prim-uniq-0.1.0.1
 - ref-tf-0.4.0.1
 - sdl2-image-2.0.0
-resolver: lts-7.21
+- lens-4.15.3
+resolver: lts-8.22
