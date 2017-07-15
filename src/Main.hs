@@ -97,7 +97,10 @@ main = do
     window <- SDL.createWindow "Zombicus" SDL.defaultWindow
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
 
-    human <- SDL.Image.loadTexture renderer "images/homo-sapien-left.png"
+    humanLeft <- SDL.Image.loadTexture renderer "images/homo-sapien-left.png"
+    humanRight <- SDL.Image.loadTexture renderer "images/homo-sapien-right.png"
+    zombieLeft <- SDL.Image.loadTexture renderer "images/homo-zombicus-left.png"
+    zombieRight <- SDL.Image.loadTexture renderer "images/homo-zombicus-right.png"
 
     let render :: RenderData -> IO ()
         render (RenderData chars) = do
@@ -107,7 +110,11 @@ main = do
                 let cpos = SDL.P $ floor <$> pos c
                     size = V2 53 96
                     destRect = SDL.Rectangle cpos size
-                SDL.copy renderer human Nothing (Just destRect)
+                    (V2 vx _) = velocity (c :: Character)
+                    sprite = case characterType c of
+                        Sapiens -> if vx < 0 then humanLeft else humanRight
+                        Zombicus -> if vx < 0 then zombieLeft else zombieRight
+                SDL.copy renderer sprite Nothing (Just destRect)
             SDL.present renderer
 
     rnd <- getStdGen
