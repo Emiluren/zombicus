@@ -2,7 +2,7 @@
 import ReflexHost
 import Records
 
-import System.Random
+import System.Random (StdGen, getStdGen, split, randoms)
 import Control.Monad.Fix (MonadFix)
 import Data.List (sortOn)
 
@@ -20,16 +20,11 @@ data RenderData = RenderData [Character]
 speed :: Double
 speed = 80
 
-makeTrajectory :: StdGen -> Double -> V2 Double -> Trajectory
-makeTrajectory rng t0_ orig_ =
-    let rndPeriod:rndAngle:_ = randoms rng :: [Double]
-        angle = rndAngle * pi * 2
-    in Trajectory
-       { _t0 = t0_
-       , _orig = orig_
-       , _period = rndPeriod + 0.5
-       , _velocity = V2 (sin angle) (cos angle) ^* speed
-       }
+hitsObstacle :: V2 Double -> Bool
+hitsObstacle (V2 x y) = x < 0 || x > 747 || y < 0 || y > 504
+
+step :: Double
+step = 0.02
 
 positionAt :: Trajectory -> Double -> V2 Double
 positionAt traj t =
@@ -40,9 +35,29 @@ changeTrajectory :: (Reflex t) =>
 changeTrajectory traj time () = do
     currentTraj <- sample traj
     t <- sample time
-    if t - currentTraj^.t0 >= currentTraj^.period
-        then return $ Just ()
-        else return Nothing
+    if t - currentTraj^.t0 >= currentTraj^.period ||
+        hitsObstacle (positionAt currentTraj$ t + step)
+    then return $ Just ()
+    else return Nothing
+
+-- Attempts to find a random trajectory 10 times that doesn't walk into an obstacle
+makeTrajectory :: StdGen -> Double -> V2 Double -> Trajectory
+makeTrajectory rng t0_ orig_ = findNew 10
+    where
+        findNew :: Int -> Trajectory
+        findNew attempts =
+            let rndPeriod:rndAngle:_ = randoms rng
+                angle = rndAngle * pi * 2
+                traj = Trajectory
+                    { _t0 = t0_
+                    , _orig = orig_
+                    , _period = rndPeriod + 0.5
+                    , _velocity = V2 (sin angle) (cos angle) ^* speed
+                    }
+            in if hitsObstacle (positionAt traj $ t0_ + step*2) && attempts > 1 then
+                findNew (attempts - 1)
+            else
+                traj
 
 newTrajectory :: (Reflex t) =>
     Behavior t Trajectory -> Behavior t Double -> StdGen ->
@@ -82,7 +97,7 @@ reflexGuest rnd _eSdlEvent eTick time = do
     let startPositions = zipWith V2 [100,200..] [150,300..]
     chars <- sequenceA $
         zipWith3 (simpleHomoSapiens time eTick)
-             (generators rnd) [0..3] startPositions
+             (generators rnd) [0..2] startPositions
 
     -- Make sure characters are depth sorted
     return $ RenderData . sortOn (^.pos._y) <$> sequenceA chars
