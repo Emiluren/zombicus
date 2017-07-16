@@ -88,18 +88,14 @@ reflexGuest rnd _eSdlEvent eTick time = do
     return $ RenderData . sortOn (^.pos._y) <$> sequenceA chars
 
 loadTextures :: SDL.Renderer -> IO Textures
-loadTextures renderer = do
-    hl <- SDL.Image.loadTexture renderer "images/homo-sapien-left.png"
-    hr <- SDL.Image.loadTexture renderer "images/homo-sapien-right.png"
-    zl <- SDL.Image.loadTexture renderer "images/homo-zombicus-left.png"
-    zr <- SDL.Image.loadTexture renderer "images/homo-zombicus-right.png"
-
-    return Textures
-        { _humanLeft = hl
-        , _humanRight = hr
-        , _zombieLeft = zl
-        , _zombieRight = zr
-        }
+loadTextures renderer =
+    Textures
+    <$> load "images/homo-sapien-left.png"
+    <*> load "images/homo-sapien-right.png"
+    <*> load "images/homo-zombicus-left.png"
+    <*> load "images/homo-zombicus-right.png"
+    where
+        load = SDL.Image.loadTexture renderer
 
 renderCharacter :: SDL.Renderer -> Textures -> Character -> IO ()
 renderCharacter renderer textures character = do
@@ -108,9 +104,9 @@ renderCharacter renderer textures character = do
         destRect = SDL.Rectangle cpos size
         (V2 vx _) = character^.velocity
         sprite = case character^.characterType of
-            Sapiens -> if vx < 0 then textures^.humanLeft else textures^.humanRight
-            Zombicus -> if vx < 0 then textures^.zombieLeft else textures^.zombieRight
-    SDL.copy renderer sprite Nothing (Just destRect)
+            Sapiens -> if vx < 0 then humanLeft else humanRight
+            Zombicus -> if vx < 0 then zombieLeft else zombieRight
+    SDL.copy renderer (textures^.sprite) Nothing (Just destRect)
 
 
 render :: SDL.Renderer -> Textures -> RenderData -> IO ()
