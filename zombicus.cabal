@@ -19,6 +19,7 @@ executable zombicus
   other-modules:       ReflexHost
   default-language:    Haskell2010
   other-modules:       Records
+                     , Rendering
   build-depends:       base >= 4.7 && < 5
                      , reflex
                      , sdl2
