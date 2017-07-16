@@ -5,6 +5,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 module Records where
 
+import qualified SDL
 import SDL.Vect (V2(..))
 import Control.Lens.TH (makeFieldsNoPrefix)
 
@@ -27,3 +28,12 @@ data Character =
               }
 
 makeFieldsNoPrefix ''Character
+
+data Textures =
+    Textures { _humanLeft :: SDL.Texture
+             , _humanRight :: SDL.Texture
+             , _zombieLeft :: SDL.Texture
+             , _zombieRight :: SDL.Texture
+             }
+
+makeFieldsNoPrefix ''Textures

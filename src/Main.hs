@@ -3,7 +3,6 @@ import ReflexHost
 import Records
 
 import System.Random
-import Control.Monad (forM_)
 import Control.Monad.Fix (MonadFix)
 import Data.List (sortOn)
 
@@ -25,11 +24,12 @@ makeTrajectory :: StdGen -> Double -> V2 Double -> Trajectory
 makeTrajectory rng t0_ orig_ =
     let rndPeriod:rndAngle:_ = randoms rng :: [Double]
         angle = rndAngle * pi * 2
-    in Trajectory { _t0 = t0_
-                  , _orig = orig_
-                  , _period = rndPeriod + 0.5
-                  , _velocity = V2 (sin angle) (cos angle) ^* speed
-                  }
+    in Trajectory
+       { _t0 = t0_
+       , _orig = orig_
+       , _period = rndPeriod + 0.5
+       , _velocity = V2 (sin angle) (cos angle) ^* speed
+       }
 
 positionAt :: Trajectory -> Double -> V2 Double
 positionAt traj t =
@@ -38,9 +38,9 @@ positionAt traj t =
 changeTrajectory :: (Reflex t) =>
     Behavior t Trajectory -> Behavior t Double -> () -> PushM t (Maybe ())
 changeTrajectory traj time () = do
-    traj_ <- sample traj
+    currentTraj <- sample traj
     t <- sample time
-    if t - traj_^.t0 >= traj_^.period
+    if t - currentTraj^.t0 >= currentTraj^.period
         then return $ Just ()
         else return Nothing
 
@@ -50,8 +50,8 @@ newTrajectory :: (Reflex t) =>
 newTrajectory traj time gen () = do
     let (g, g') = split gen
     t <- sample time
-    traj_ <- sample traj
-    return (g', makeTrajectory g t $ positionAt traj_ t)
+    currentTraj <- sample traj
+    return (g', makeTrajectory g t $ positionAt currentTraj t)
 
 generators :: StdGen -> [StdGen]
 generators g = let (g', g'') = split g in g' : generators g''
@@ -60,24 +60,68 @@ simpleHomoSapiens :: (Reflex t, MonadHold t m, MonadFix m) =>
     Behavior t Double -> Event t () -> StdGen -> Int -> V2 Double -> m (Behavior t Character)
 simpleHomoSapiens time eTick rng self posInit= do
     let (rng1, rng2) = split rng
-    t <- sample time
+    currentTime <- sample time
 
     rec
+        -- Direction should be changed when traj.period has passed
         let eChange = push (changeTrajectory traj time) eTick
-        eTraj <- mapAccumM_ (newTrajectory traj time) rng2 eChange
-        traj <- hold (makeTrajectory rng1 t posInit) eTraj
 
-    let p = positionAt <$> traj <*> time
-        v = (^.velocity) <$> traj
-    return $ Character self Sapiens <$> p <*> v
+        -- Pick new direction at random
+        eTraj <- mapAccumM_ (newTrajectory traj time) rng2 eChange
+
+        -- Start with a random trajectory and pick a new one every period seconds
+        traj <- hold (makeTrajectory rng1 currentTime posInit) eTraj
+
+    let position = positionAt <$> traj <*> time
+        vel = (^.velocity) <$> traj
+    return $ Character self Sapiens <$> position <*> vel
 
 reflexGuest :: StdGen -> SdlApp RenderData
 reflexGuest rnd _eSdlEvent eTick time = do
+    -- Create a few characters spread out over the board
     let startPositions = zipWith V2 [100,200..] [150,300..]
     chars <- sequenceA $
         zipWith3 (simpleHomoSapiens time eTick)
              (generators rnd) [0..3] startPositions
+
+    -- Make sure characters are depth sorted
     return $ RenderData . sortOn (^.pos._y) <$> sequenceA chars
+
+loadTextures :: SDL.Renderer -> IO Textures
+loadTextures renderer = do
+    hl <- SDL.Image.loadTexture renderer "images/homo-sapien-left.png"
+    hr <- SDL.Image.loadTexture renderer "images/homo-sapien-right.png"
+    zl <- SDL.Image.loadTexture renderer "images/homo-zombicus-left.png"
+    zr <- SDL.Image.loadTexture renderer "images/homo-zombicus-right.png"
+
+    return Textures
+        { _humanLeft = hl
+        , _humanRight = hr
+        , _zombieLeft = zl
+        , _zombieRight = zr
+        }
+
+renderCharacter :: SDL.Renderer -> Textures -> Character -> IO ()
+renderCharacter renderer textures character = do
+    let cpos = SDL.P $ floor <$> character^.pos
+        size = V2 53 96
+        destRect = SDL.Rectangle cpos size
+        (V2 vx _) = character^.velocity
+        sprite = case character^.characterType of
+            Sapiens -> if vx < 0 then textures^.humanLeft else textures^.humanRight
+            Zombicus -> if vx < 0 then textures^.zombieLeft else textures^.zombieRight
+    SDL.copy renderer sprite Nothing (Just destRect)
+
+
+render :: SDL.Renderer -> Textures -> RenderData -> IO ()
+render renderer textures (RenderData chars) = do
+    SDL.rendererDrawColor renderer $= V4 200 200 200 255
+    SDL.clear renderer
+
+    mapM_ (renderCharacter renderer textures) chars
+
+    SDL.present renderer
+
 
 main :: IO ()
 main = do
@@ -85,25 +129,7 @@ main = do
     window <- SDL.createWindow "Zombicus" SDL.defaultWindow
     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
 
-    humanLeft <- SDL.Image.loadTexture renderer "images/homo-sapien-left.png"
-    humanRight <- SDL.Image.loadTexture renderer "images/homo-sapien-right.png"
-    zombieLeft <- SDL.Image.loadTexture renderer "images/homo-zombicus-left.png"
-    zombieRight <- SDL.Image.loadTexture renderer "images/homo-zombicus-right.png"
-
-    let render :: RenderData -> IO ()
-        render (RenderData chars) = do
-            SDL.rendererDrawColor renderer $= V4 200 200 200 255
-            SDL.clear renderer
-            forM_ chars $ \c -> do
-                let cpos = SDL.P $ floor <$> c^.pos
-                    size = V2 53 96
-                    destRect = SDL.Rectangle cpos size
-                    (V2 vx _) = c^.velocity
-                    sprite = case c^.characterType of
-                        Sapiens -> if vx < 0 then humanLeft else humanRight
-                        Zombicus -> if vx < 0 then zombieLeft else zombieRight
-                SDL.copy renderer sprite Nothing (Just destRect)
-            SDL.present renderer
+    textures <- loadTextures renderer
 
     rnd <- getStdGen
-    reflexHost (reflexGuest rnd) render
+    reflexHost (reflexGuest rnd) (render renderer textures)
