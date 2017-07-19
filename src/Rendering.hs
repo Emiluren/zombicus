@@ -35,7 +35,7 @@ renderCharacter renderer textures character = do
 
 render :: SDL.Renderer -> Textures -> RenderData -> IO ()
 render renderer textures (RenderData chars) = do
-    SDL.rendererDrawColor renderer $= V4 200 200 200 255
+    SDL.rendererDrawColor renderer $= V4 240 240 255 255
     SDL.clear renderer
 
     mapM_ (renderCharacter renderer textures) chars
