@@ -20,6 +20,8 @@ executable zombicus
   default-language:    Haskell2010
   other-modules:       Records
                      , Rendering
+                     , SimpleHomoSapiens
+                     , HomoZombicus
   build-depends:       base >= 4.7 && < 5
                      , reflex
                      , sdl2
