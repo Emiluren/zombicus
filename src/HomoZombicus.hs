@@ -102,8 +102,8 @@ homoZombicus time eTick self posInit scene = do
     currentTime <- sample time
 
     rec
-        let eChange = push (changeState self time state scene) eTick
-        state <- hold (makeZombieState currentTime posInit self []) eChange
+        let eChangeState = push (changeState self time state scene) eTick
+        state <- hold (makeZombieState currentTime posInit self []) eChangeState
 
     let position = positionAt <$> state <*> time
         vel = (^.velocity) <$> state

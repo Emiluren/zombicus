@@ -64,7 +64,7 @@ newTrajectory traj time gen () = do
 
 simpleHomoSapiens :: (Reflex t, MonadHold t m, MonadFix m) =>
     Behavior t Double -> Event t () -> StdGen -> Int -> V2 Double -> m (Behavior t Character)
-simpleHomoSapiens time eTick rng self posInit= do
+simpleHomoSapiens time eTick rng self posInit = do
     let (rng1, rng2) = split rng
     currentTime <- sample time
 
