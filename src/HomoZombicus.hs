@@ -12,8 +12,6 @@ import SDL.Vect (V2(..), (^*), (*^), qd, distance, signorm)
 import Control.Lens ((^.))
 
 nearest :: V2 Double -> Int -> [Character] -> Maybe Character
-nearest _ _ [] = Nothing
-nearest _ _ [_] = Nothing
 nearest pos_ self scene =
     let
         distToOther :: Character -> Double
@@ -25,13 +23,16 @@ nearest pos_ self scene =
         notSelf :: Character -> Bool
         notSelf c = c^.characterId /= self
 
-        closest :: Character
-        closest = minimumBy compareDistance $ filter notSelf scene
+        notFarAwayZombie :: Character -> Bool
+        notFarAwayZombie c = c^.characterType /= Zombicus || distance (c^.pos) pos_ < 60
+
+        possibleChoices :: [Character]
+        possibleChoices = filter notSelf $ filter notFarAwayZombie scene
     in
-        if closest^.characterType == Zombicus && distance (closest^.pos) pos_ > 60 then
+        if null possibleChoices then
             Nothing
         else
-            Just closest
+            Just $ minimumBy compareDistance possibleChoices
 
 nearestSapiens :: V2 Double -> Int -> [Character] -> Maybe Character
 nearestSapiens pos_ self = nearest pos_ self . filter (\c -> c^.characterType == Sapiens)
