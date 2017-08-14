@@ -28,11 +28,9 @@ bitableHomoSapiens :: forall t m. (Reflex t, MonadHold t m, MonadFix m) =>
     m (Behavior t Character, Event t Int)
 bitableHomoSapiens time eTick eAllBites rng self posInit scene = do
     h <- simpleHomoSapiens time eTick rng self posInit
+    eBiteMe <- headE $ ffilter (self `elem`) eAllBites
 
-    let eBiteMe :: Event t [Int]
-        eBiteMe = ffilter (self `elem`) eAllBites
-
-        becomeZombie :: a -> PushM t (Behavior t Character, Event t Int)
+    let becomeZombie :: a -> PushM t (Behavior t Character, Event t Int)
         becomeZombie _id = do
             ch <- sample h
             homoZombicus time eTick self (ch^.pos) scene
