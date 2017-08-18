@@ -1,6 +1,7 @@
 {-# LANGUAGE RecursiveDo, DuplicateRecordFields #-}
 module SimpleHomoSapiens (simpleHomoSapiens) where
 import Records
+import qualified World
 
 import System.Random (StdGen, split, randoms)
 import Control.Monad.Fix (MonadFix)
@@ -13,9 +14,6 @@ import Control.Lens ((^.))
 
 speed :: Double
 speed = 80
-
-hitsObstacle :: V2 Double -> Bool
-hitsObstacle (V2 x y) = x < 0 || x > 747 || y < 0 || y > 504
 
 step :: Double
 step = 0.02
@@ -30,7 +28,7 @@ changeTrajectory traj time () = do
     currentTraj <- sample traj
     t <- sample time
     if t - currentTraj^.t0 >= currentTraj^.period ||
-        hitsObstacle (positionAt currentTraj$ t + step)
+        World.hitsObstacle (positionAt currentTraj$ t + step)
     then return $ Just ()
     else return Nothing
 
@@ -48,7 +46,7 @@ makeTrajectory rng t0_ orig_ = findNew 10
                     , _period = rndPeriod + 0.5
                     , _velocity = V2 (sin angle) (cos angle) ^* speed
                     }
-            in if hitsObstacle (positionAt traj $ t0_ + step*2) && attempts > 1 then
+            in if World.hitsObstacle (positionAt traj $ t0_ + step*2) && attempts > 1 then
                 findNew (attempts - 1)
             else
                 traj

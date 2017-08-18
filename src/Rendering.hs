@@ -1,6 +1,7 @@
 module Rendering where
 
 import Records
+import qualified World
 
 import qualified SDL
 import SDL (($=))
@@ -21,10 +22,20 @@ loadTextures renderer =
     where
         load = SDL.Image.loadTexture renderer
 
+charWidth :: Num a => a
+charWidth = 53
+
+charHeight :: Num a => a
+charHeight = 96
+
+characterOffset :: V2 Double
+characterOffset = V2 (charWidth / 2) (charHeight - 10)
+
 renderCharacter :: SDL.Renderer -> Textures -> Character -> IO ()
 renderCharacter renderer textures character = do
-    let cpos = SDL.P $ floor <$> character^.pos
-        size = V2 53 96
+    let size = V2 charWidth charHeight
+        pos' = (character^.pos) - characterOffset
+        cpos = SDL.P $ floor <$> pos'
         destRect = SDL.Rectangle cpos size
         (V2 vx _) = character^.velocity
         sprite = case character^.characterType of
@@ -34,10 +45,11 @@ renderCharacter renderer textures character = do
 
 
 render :: SDL.Renderer -> Textures -> RenderData -> IO ()
-render renderer textures (RenderData chars) = do
+render renderer textures (RenderData characters) = do
     SDL.rendererDrawColor renderer $= V4 240 240 255 255
     SDL.clear renderer
 
-    mapM_ (renderCharacter renderer textures) chars
+    World.renderHoles renderer $ V4 200 200 240 255
+    mapM_ (renderCharacter renderer textures) characters
 
     SDL.present renderer

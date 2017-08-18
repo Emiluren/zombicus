@@ -22,11 +22,15 @@ executable zombicus
                      , Rendering
                      , SimpleHomoSapiens
                      , HomoZombicus
+                     , World
   build-depends:       base >= 4.7 && < 5
                      , reflex
                      , sdl2
                      , sdl2-image
+                     , sdl2-gfx
                      , dependent-sum
                      , mtl
                      , random
                      , lens >= 4.15.3
+                     , containers
+                     , vector
